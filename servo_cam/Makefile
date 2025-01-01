@@ -7,7 +7,7 @@ CC = gcc
 CFLAGS = -Wall -Werror -g
 
 # Вказуємо директорії для включень
-INCLUDE_DIRS = -I./
+INCLUDE_DIRS = -I./inc/
 
 # Вказуємо бібліотеки для лінкування
 LIBS = -lwiringPi
@@ -16,7 +16,7 @@ LIBS = -lwiringPi
 BUILD_DIR = ../build/servo_cam
 
 # Вказуємо вихідний файл
-SRC_DIR = .
+SRC_DIR = ./src
 SRC_FILES = $(wildcard $(SRC_DIR)/*.c)
 
 # Описуємо результат компіляції
