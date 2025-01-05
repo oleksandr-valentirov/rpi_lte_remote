@@ -53,9 +53,13 @@ int main(int argc, char const *argv[]) {
     rc_conn_state_t cmd_server_state = RC_NO_CONN;
     uint8_t buffer[256];
     ssize_t bytes_received = 0;
-    rc_auth_t me = {.type = 1, .name = "alpha"};
+    rc_auth_t me;
     rc_header_t *rc_header = (rc_header_t *)buffer;
     uint16_t cur_port = 0;
+
+    memset(&me, 0, sizeof(rc_auth_t));
+    me.type = 1;
+    memcpy(&(me.name), "alpha", strlen("alpha"));
 
     /* timeout for the socket */
     struct timeval tv;
