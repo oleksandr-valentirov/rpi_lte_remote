@@ -30,7 +30,8 @@ typedef struct rc_header {
 } __attribute__((__packed__)) rc_header_t;
 
 typedef struct rc_connect_cmd {
-
+    uint32_t ip;
+    uint16_t port;
 } __attribute__((__packed__)) rc_connect_cmd_t;
 
 typedef struct rc_cam_pos_cmd {
@@ -46,26 +47,27 @@ typedef struct rc_auth {
 
 uint8_t is_exit = 0;
 
+static void config_socket(struct sockaddr_in *addr_struct_ptr, int *sock, uint16_t port, uint32_t ip);
+
 
 int main(int argc, char const *argv[]) {
-    int cmd_sock = 0;
+    int cmd_sock = 0, default_ip = 0;
     struct sockaddr_in cmd_server_addr;
     rc_conn_state_t cmd_server_state = RC_NO_CONN;
     uint8_t buffer[256];
     ssize_t bytes_received = 0;
     rc_auth_t me;
     rc_header_t *rc_header = (rc_header_t *)buffer;
-    uint16_t cur_port = 0;
+    uint16_t default_port = 7777;
 
     memset(&me, 0, sizeof(rc_auth_t));
     me.type = 1;
     memcpy(&(me.name), "alpha", strlen("alpha"));
 
-    /* timeout for the socket */
-    struct timeval tv;
-    tv.tv_sec = 1;
-    tv.tv_usec = 0;
-
+    if (inet_pton(AF_INET, "192.168.88.187", &default_ip) <= 0) {
+        perror("Invalid default address or address not supported");
+        return 1;
+    }
 
     if (wiringPiSetup () == -1) {
         perror("PWM setup failed");
@@ -85,15 +87,7 @@ int main(int argc, char const *argv[]) {
             }
 
             /* config socket */
-            memset(&cmd_server_addr, 0, sizeof(cmd_server_addr));
-            cmd_server_addr.sin_family = AF_INET;
-            cmd_server_addr.sin_port = htons(7777);
-            setsockopt(cmd_sock, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv, sizeof tv);
-            if (inet_pton(AF_INET, "192.168.88.187", &cmd_server_addr.sin_addr) <= 0) {
-                perror("Invalid default address or address not supported");
-                close(cmd_sock);
-                return 1;
-            }
+            config_socket(&cmd_server_addr, &cmd_sock, default_port, default_ip);
 
             /* wait for connection to the default server */
             printf("Attempting to connect to the default server\r\n");
@@ -101,7 +95,6 @@ int main(int argc, char const *argv[]) {
                 usleep(1000000);
             printf("Connected default server\r\n");
             cmd_server_state = RC_CONN;
-            cur_port = 7777;
             /* send auth packet and go straight to the next case */
             rc_header->cmd_class = 1;
             rc_header->cmd_id = 1;
@@ -126,16 +119,6 @@ int main(int argc, char const *argv[]) {
                         return 1;
                     }
 
-                    /* config socket */
-                    memset(&cmd_server_addr, 0, sizeof(cmd_server_addr));
-                    cmd_server_addr.sin_family = AF_INET;
-                    cmd_server_addr.sin_port = htons(cur_port);
-                    if (inet_pton(AF_INET, "192.168.88.187", &cmd_server_addr.sin_addr) <= 0) {
-                        perror("Invalid default address on re-creation or address not supported");
-                        close(cmd_sock);
-                        return 1;
-                    }
-
                     printf("re-connecting\r\n");
                     if (connect(cmd_sock, (struct sockaddr *)&cmd_server_addr, sizeof(cmd_server_addr)) == 0) {
                         cmd_server_state = RC_CONN;
@@ -154,7 +137,34 @@ int main(int argc, char const *argv[]) {
                 if (cmd_server_state == RC_NO_CONN)
                     close(cmd_sock);
             } else {
-                /* process response */
+                /* process and response */
+                if (rc_header->payload_len) {
+                    bytes_received = recv(cmd_sock, buffer + sizeof(rc_header_t), rc_header->payload_len, 0);
+                    if (bytes_received < rc_header->payload_len) {
+                        printf("Error: cmd class %d id %d payload is too short\r\n", rc_header->cmd_class, rc_header->cmd_id);
+                    }
+                }
+
+                if (rc_header->cmd_class == 2 && rc_header->cmd_id == 1) {
+                    /* process a cmd to connect to another server */
+                    close(cmd_sock);
+                    /* create socket */
+                    if ((cmd_sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
+                        perror("Socket re-creation failed");
+                        return 1;
+                    }
+                    config_socket(&cmd_server_addr, &cmd_sock, 
+                        ((rc_connect_cmd_t *)(buffer + sizeof(rc_header_t)))->port, 
+                        ((rc_connect_cmd_t *)(buffer + sizeof(rc_header_t)))->ip
+                    );
+
+                    printf("Attempting to connect to the new server...");                    
+                    if (connect(cmd_sock, (struct sockaddr *)&cmd_server_addr, sizeof(cmd_server_addr)) < 0) {
+                        close(cmd_sock);
+                        cmd_server_state = RC_NO_CONN;
+                        printf("failed\r\n");
+                    } else {printf("success\r\n");}
+                }
             }
 
             break;
@@ -164,4 +174,16 @@ int main(int argc, char const *argv[]) {
     close(cmd_sock);
 
     return 0;
+}
+
+static void config_socket(struct sockaddr_in *addr_struct_ptr, int *sock, uint16_t port, uint32_t ip) {
+    struct timeval tv;  /* timeout for the socket */
+    tv.tv_sec = 2;
+    tv.tv_usec = 0;
+
+    memset(addr_struct_ptr, 0, sizeof(struct sockaddr_in));
+    addr_struct_ptr->sin_family = AF_INET;
+    addr_struct_ptr->sin_port = htons(port);
+    addr_struct_ptr->sin_addr.s_addr = ip;
+    setsockopt(*sock, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv, sizeof tv);
 }
