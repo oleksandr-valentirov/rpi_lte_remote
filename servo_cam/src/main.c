@@ -29,15 +29,15 @@ typedef struct rc_header {
     uint16_t payload_len;
 } __attribute__((__packed__)) rc_header_t;
 
+typedef struct rc_cam_pos {
+    int8_t x;
+    int8_t y;
+} __attribute__((__packed__)) rc_cam_pos_t;
+
 typedef struct rc_connect_cmd {
     uint32_t ip;
     uint16_t port;
 } __attribute__((__packed__)) rc_connect_cmd_t;
-
-typedef struct rc_cam_pos_cmd {
-    uint8_t x;
-    uint8_t y;
-} __attribute__((__packed__)) rc_cam_pos_cmd_t;
 
 typedef struct rc_auth {
     uint8_t type;
@@ -74,6 +74,8 @@ int main(int argc, char const *argv[]) {
         return 1;
     }
 
+    pwmSetMode(PWM_MODE_MS);
+    pwmSetClock(384000);
     pinMode(X, PWM_OUTPUT);
     pinMode(Y, PWM_OUTPUT);
 
@@ -164,6 +166,9 @@ int main(int argc, char const *argv[]) {
                         cmd_server_state = RC_NO_CONN;
                         printf("failed\r\n");
                     } else {printf("success\r\n");}
+                } else if (rc_header->cmd_class == 3 && rc_header->cmd_id == 1) {
+                    pwmWrite(X, 512 + 512 / 50 * (((rc_cam_pos_t *)(buffer + sizeof(rc_header_t)))->x));
+                    pwmWrite(Y, 512 + 512 / 50 * (((rc_cam_pos_t *)(buffer + sizeof(rc_header_t)))->y));
                 }
             }
 
