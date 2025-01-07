@@ -10,7 +10,7 @@ CFLAGS = -Wall -Werror -g
 INCLUDE_DIRS = -I./inc/
 
 # Вказуємо бібліотеки для лінкування
-LIBS = -lwiringPi
+LIBS = -lwiringPi -lconfuse
 
 # Вказуємо директорії для артефактів
 BUILD_DIR = ../build/servo_cam

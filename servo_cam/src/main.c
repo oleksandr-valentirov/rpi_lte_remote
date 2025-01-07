@@ -7,13 +7,14 @@
 #include <sys/time.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
+#include "config.h"
 
 #include <wiringPi.h>
 
 
 #define PWM0        26
 #define PWM1        23
-#define CONF_PATH   "/etc/servo_cam/config"
+#define CONF_PATH   "/etc/servo_cam/config.cfg"
 
 #define X   PWM0
 #define Y   PWM1
@@ -59,12 +60,19 @@ int main(int argc, char const *argv[]) {
     rc_auth_t me;
     rc_header_t *rc_header = (rc_header_t *)buffer;
     uint16_t default_port = 7777;
+    cfg_t *config = config_parse(CONF_PATH);
+
+    if (config == NULL) {
+        printf("Invalid config file\r\n");
+        return 1;
+    }
 
     memset(&me, 0, sizeof(rc_auth_t));
     me.type = 1;
-    memcpy(&(me.name), "alpha", strlen("alpha"));
+    memcpy(&(me.name), cfg_getstr(config, "name"), strlen(cfg_getstr(config, "name")));
 
-    if (inet_pton(AF_INET, "192.168.88.187", &default_ip) <= 0) {
+    default_port = (uint16_t)cfg_getint(config, "port");
+    if (inet_pton(AF_INET, cfg_getstr(config, "ip_addr"), &default_ip) <= 0) {
         perror("Invalid default address or address not supported");
         return 1;
     }
@@ -169,6 +177,7 @@ int main(int argc, char const *argv[]) {
                 } else if (rc_header->cmd_class == 3 && rc_header->cmd_id == 1) {
                     pwmWrite(X, 512 + 512 / 50 * (((rc_cam_pos_t *)(buffer + sizeof(rc_header_t)))->x));
                     pwmWrite(Y, 512 + 512 / 50 * (((rc_cam_pos_t *)(buffer + sizeof(rc_header_t)))->y));
+                    printf("x = %d\r\n", 512 + 512 / 50 * (((rc_cam_pos_t *)(buffer + sizeof(rc_header_t)))->x));
                 }
             }
 

@@ -2,5 +2,5 @@
 
 <p>Залежності<br>
 - wiringPi (https://github.com/WiringPi/WiringPi/releases)<br>
-- libconfig (https://github.com/hyperrealm/libconfig)
+- libconfuse
 </p>
