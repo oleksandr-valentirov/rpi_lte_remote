@@ -1,9 +1,5 @@
 # Вказуємо директорії, де розміщуються підкаталоги з програмами
-SUBDIRS := servo_cam
-
-# Загальні флаги компілятора
-CFLAGS = -Wall -Werror -g
-LIBS = -lwiringPi
+SUBDIRS := servo_cam cam_subprocess
 
 # Правило для компіляції всіх програм
 all: $(SUBDIRS)

@@ -7,6 +7,8 @@
 #include <sys/time.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
+#include <signal.h>
+
 #include "config.h"
 
 #include <wiringPi.h>
@@ -49,6 +51,7 @@ typedef struct rc_auth {
 uint8_t is_exit = 0;
 
 static void config_socket(struct sockaddr_in *addr_struct_ptr, int *sock, uint16_t port, uint32_t ip);
+static void intHandler(int signal);
 
 
 int main(int argc, char const *argv[]) {
@@ -67,25 +70,30 @@ int main(int argc, char const *argv[]) {
         return 1;
     }
 
+    /* config name for authentication */
     memset(&me, 0, sizeof(rc_auth_t));
     me.type = 1;
     memcpy(&(me.name), cfg_getstr(config, "name"), strlen(cfg_getstr(config, "name")));
 
+    /* config default server addr */
     default_port = (uint16_t)cfg_getint(config, "port");
     if (inet_pton(AF_INET, cfg_getstr(config, "ip_addr"), &default_ip) <= 0) {
         perror("Invalid default address or address not supported");
         return 1;
     }
 
+    /* config PWM */
     if (wiringPiSetup () == -1) {
         perror("PWM setup failed");
         return 1;
     }
-
     pwmSetMode(PWM_MODE_MS);
     pwmSetClock(384000);
     pinMode(X, PWM_OUTPUT);
     pinMode(Y, PWM_OUTPUT);
+
+    /* reg a signal handler */
+    signal(SIGINT, intHandler);
 
     while (!is_exit) {
         switch (cmd_server_state) {
@@ -200,4 +208,9 @@ static void config_socket(struct sockaddr_in *addr_struct_ptr, int *sock, uint16
     addr_struct_ptr->sin_port = htons(port);
     addr_struct_ptr->sin_addr.s_addr = ip;
     setsockopt(*sock, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv, sizeof tv);
+}
+
+static void intHandler(int signal) {
+    if (signal == SIGINT)
+        is_exit = 1;
 }

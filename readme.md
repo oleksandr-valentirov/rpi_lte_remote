@@ -30,5 +30,26 @@
             <td>Клієнт та сервер</td>
             <td><a href=https://github.com/oleksandr-valentirov/remote_cam_app>link</a></td>
         </tr>
+        <tr>
+            <td>cam_subprocess</td>
+            <td></td>
+        </tr>
+    </tbody>
+</table>
+
+<h1>Cam subprocess</h1>
+<p>Програма захоплює кадри з CSI камери, та створює M-JPEG стрім на задану адресу.</p>
+<table>
+    <thead>
+        <tr>
+            <th>Залежності</th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td>libopencv-dev</td>
+            <td></td>
+        </tr>
     </tbody>
 </table>
