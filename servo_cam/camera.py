@@ -3,6 +3,7 @@
 import time
 import socket
 import io
+import signal
 from threading import Thread
 from picamera2 import Picamera2
 from argparse import ArgumentParser
@@ -36,16 +37,22 @@ def cam_handler(ip, port):
         time.sleep(0.03)
 
 
+def sing_handler(sign, frame):
+    global is_exit
+    if sign == signal.SIGINT:
+        is_exit = True
+
+
 if __name__ == "__main__":
     args = ArgumentParser()
     args.add_argument("--ip", dest="ip", type=str, required=True)
     args.add_argument("--port", dest="port", type=int, required=True)
     args = args.parse_args()
 
+    signal.signal(signal.SIGINT, sing_handler)
+
     t = Thread(target=cam_handler, args=(args.ip, args.port))
     t.start()
 
-    while not is_exit:
-        cmd = input(">>> ")
-        if cmd == "exit":
-            is_exit = True
+    t.join()  # wait for the SIGINT
+    print("cam closed")

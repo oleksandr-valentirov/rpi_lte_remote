@@ -6,6 +6,7 @@
 #include <errno.h>
 #include <sys/time.h>
 #include <sys/socket.h>
+#include <sys/wait.h>
 #include <arpa/inet.h>
 #include <signal.h>
 
@@ -14,9 +15,11 @@
 #include <wiringPi.h>
 
 
-#define PWM0        26
-#define PWM1        23
-#define CONF_PATH   "/etc/servo_cam/config.cfg"
+#define PWM0            26
+#define PWM1            23
+#define CONF_PATH       "/etc/servo_cam/config.cfg"
+#define CAM_PROC        "camera.py"
+#define CAM_PROC_PATH   "/etc/servo_cam/camera.py"
 
 #define X   PWM0
 #define Y   PWM1
@@ -42,6 +45,10 @@ typedef struct rc_connect_cmd {
     uint16_t port;
 } __attribute__((__packed__)) rc_connect_cmd_t;
 
+typedef struct rc_start_video_cmd {
+    uint16_t port;
+} __attribute__((__packed__)) rc_start_video_cmd_t;
+
 typedef struct rc_auth {
     uint8_t type;
     char name[16];
@@ -52,6 +59,7 @@ uint8_t is_exit = 0;
 
 static void config_socket(struct sockaddr_in *addr_struct_ptr, int *sock, uint16_t port, uint32_t ip);
 static void intHandler(int signal);
+static void kill_child_video_proc(pid_t pid);
 
 
 int main(int argc, char const *argv[]) {
@@ -64,6 +72,8 @@ int main(int argc, char const *argv[]) {
     rc_header_t *rc_header = (rc_header_t *)buffer;
     uint16_t default_port = 7777;
     cfg_t *config = config_parse(CONF_PATH);
+    pid_t video_pid = 0;
+    char port_str[6];
 
     if (config == NULL) {
         printf("Invalid config file\r\n");
@@ -152,14 +162,17 @@ int main(int argc, char const *argv[]) {
                     usleep(1000000);
                 }
 
-                if (cmd_server_state == RC_NO_CONN)
+                if (cmd_server_state == RC_NO_CONN) {
                     close(cmd_sock);
+                    kill_child_video_proc(video_pid);
+                }
             } else {
                 /* process and response */
                 if (rc_header->payload_len) {
                     bytes_received = recv(cmd_sock, buffer + sizeof(rc_header_t), rc_header->payload_len, 0);
                     if (bytes_received < rc_header->payload_len) {
                         printf("Error: cmd class %d id %d payload is too short\r\n", rc_header->cmd_class, rc_header->cmd_id);
+                        break;
                     }
                 }
 
@@ -182,10 +195,37 @@ int main(int argc, char const *argv[]) {
                         cmd_server_state = RC_NO_CONN;
                         printf("failed\r\n");
                     } else {printf("success\r\n");}
+                } else if (rc_header->cmd_class == 2 && rc_header->cmd_id == 3) {
+                    /* disconnect */
+                    close(cmd_sock);
+                    cmd_server_state = RC_NO_CONN;
+                    kill_child_video_proc(video_pid);
+                    video_pid = 0;
+                    printf("disconnected by cmd\r\n");
+                    break;
+                } else if (rc_header->cmd_class == 2 && rc_header->cmd_id == 4) {
+                    /* start video stream */
+                    if (video_pid != 0) {
+                        printf("video already started\r\n");
+                        break;
+                    }
+
+                    video_pid = fork();
+                    if (video_pid < 0)
+                        perror("video fork failed");
+                    else if (video_pid == 0) {
+                        printf("new process started...\r\n");
+                        sprintf(port_str, "%u", ((rc_start_video_cmd_t *)(buffer + sizeof(rc_header_t)))->port);
+                        execl(CAM_PROC_PATH, CAM_PROC, 
+                            "--ip", inet_ntoa(cmd_server_addr.sin_addr), 
+                            "--port", port_str,
+                            (char *)NULL
+                        );
+                        printf("new process failed to start\r\n");
+                    }
                 } else if (rc_header->cmd_class == 3 && rc_header->cmd_id == 1) {
                     pwmWrite(X, 512 + 512 / 50 * (((rc_cam_pos_t *)(buffer + sizeof(rc_header_t)))->x));
                     pwmWrite(Y, 512 + 512 / 50 * (((rc_cam_pos_t *)(buffer + sizeof(rc_header_t)))->y));
-                    printf("x = %d\r\n", 512 + 512 / 50 * (((rc_cam_pos_t *)(buffer + sizeof(rc_header_t)))->x));
                 }
             }
 
@@ -213,4 +253,11 @@ static void config_socket(struct sockaddr_in *addr_struct_ptr, int *sock, uint16
 static void intHandler(int signal) {
     if (signal == SIGINT)
         is_exit = 1;
+}
+
+static void kill_child_video_proc(pid_t pid) {
+    if (!pid)
+        return;
+    kill(pid, SIGINT);
+    wait(NULL);
 }
