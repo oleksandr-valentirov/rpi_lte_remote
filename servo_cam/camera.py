@@ -2,10 +2,10 @@
 
 import time
 import socket
-import io
 import signal
-from threading import Thread
 from picamera2 import Picamera2
+from picamera2.encoders import H264Encoder, MJPEGEncoder
+from picamera2.outputs import FileOutput
 from argparse import ArgumentParser
 
 
@@ -24,19 +24,6 @@ def init_cam():
     return picam2
 
 
-def cam_handler(ip, port):
-    cam = init_cam()
-    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    while not is_exit:
-        data = io.BytesIO()
-        cam.capture_file(data, format='jpeg')
-        data.seek(0)
-        for i in range(0, data.getbuffer().nbytes, MAX_PACKET_SIZE):
-            chunk = data.read(MAX_PACKET_SIZE)
-            sock.sendto(chunk, (ip, port))
-        time.sleep(0.03)
-
-
 def sing_handler(sign, frame):
     global is_exit
     if sign == signal.SIGINT:
@@ -51,8 +38,16 @@ if __name__ == "__main__":
 
     signal.signal(signal.SIGINT, sing_handler)
 
-    t = Thread(target=cam_handler, args=(args.ip, args.port))
-    t.start()
+    cam = init_cam()
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock.connect((args.ip, args.port))
+    stream = sock.makefile("wb")
+    encoder = MJPEGEncoder(20000000, qp=15, repeat=False)
+    cam.start_recording(encoder, FileOutput(stream, split=1024))
 
-    t.join()  # wait for the SIGINT
+    while not is_exit:  # wait for the sigint
+        pass
+
+    cam.stop_recording()
+    sock.close()
     print("cam closed")
