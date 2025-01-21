@@ -42,8 +42,8 @@ if __name__ == "__main__":
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock.connect((args.ip, args.port))
     stream = sock.makefile("wb")
-    encoder = MJPEGEncoder(20000000, qp=15, repeat=False)
-    cam.start_recording(encoder, FileOutput(stream, split=1024))
+    encoder = H264Encoder()
+    cam.start_recording(encoder, FileOutput(stream))
 
     while not is_exit:  # wait for the sigint
         pass
