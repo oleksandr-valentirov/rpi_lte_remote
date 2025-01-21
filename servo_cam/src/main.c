@@ -59,7 +59,7 @@ uint8_t is_exit = 0;
 
 static void config_socket(struct sockaddr_in *addr_struct_ptr, int *sock, uint16_t port, uint32_t ip);
 static void intHandler(int signal);
-static void kill_child_video_proc(pid_t pid);
+static void kill_child_video_proc(pid_t *pid);
 
 
 int main(int argc, char const *argv[]) {
@@ -164,7 +164,8 @@ int main(int argc, char const *argv[]) {
 
                 if (cmd_server_state == RC_NO_CONN) {
                     close(cmd_sock);
-                    kill_child_video_proc(video_pid);
+                    kill_child_video_proc(&video_pid);
+
                 }
             } else {
                 /* process and response */
@@ -199,8 +200,7 @@ int main(int argc, char const *argv[]) {
                     /* disconnect */
                     close(cmd_sock);
                     cmd_server_state = RC_NO_CONN;
-                    kill_child_video_proc(video_pid);
-                    video_pid = 0;
+                    kill_child_video_proc(&video_pid);
                     printf("disconnected by cmd\r\n");
                     break;
                 } else if (rc_header->cmd_class == 2 && rc_header->cmd_id == 4) {
@@ -255,9 +255,10 @@ static void intHandler(int signal) {
         is_exit = 1;
 }
 
-static void kill_child_video_proc(pid_t pid) {
+static void kill_child_video_proc(pid_t *pid) {
     if (!pid)
         return;
-    kill(pid, SIGINT);
+    kill(*pid, SIGINT);
     wait(NULL);
+    *pid = 0;
 }
