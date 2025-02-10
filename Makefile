@@ -1,5 +1,5 @@
 # Вказуємо директорії, де розміщуються підкаталоги з програмами
-SUBDIRS := servo_cam cam_subprocess
+SUBDIRS := servo_cam
 
 # Правило для компіляції всіх програм
 all: $(SUBDIRS)
